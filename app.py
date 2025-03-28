@@ -9,27 +9,20 @@ import pandas as pd
 import streamlit as st
 from streamlit_cookies_manager import EncryptedCookieManager
 
-# Determine layout dynamically
-if "page" not in st.session_state:
-    st.session_state["page"] = "login"  # Default to login
-
-LAYOUT_MODE = "centered" if st.session_state["page"] in [
-    "login", "register"] else "wide"
+LAYOUT_MODE = "wide"
 
 # Set Streamlit page layout to wide mode
 st.set_page_config(
-    page_title="FinServ: A Financial Services App",  # Title of the browser tab
-    # Icon for the browser tab (Emoji or URL)
-    page_icon="chart_with_upwards_trend",
-    layout=LAYOUT_MODE,  # Layout type: "centered" or "wide"
-    # Initial state of the sidebar: "auto", "expanded", or "collapsed"
+    page_title="FinServ: A Financial Services App",
+    page_icon="streamlit",
+    layout=LAYOUT_MODE,
     initial_sidebar_state="expanded"
 )
 
 
 # Initialize cookie manager
 cookies = EncryptedCookieManager(
-    prefix="finserv_ne3hckj923b3icn29", password="adminapp123")
+    prefix="finserv_ne3hckj923b3icn29", password="supadminapp123")
 if not cookies.ready():
     st.stop()
 
@@ -302,45 +295,49 @@ def main():
             st.session_state['page'] = "login"
 
     if st.session_state['page'] == "login":
-        st.title("Log In")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        col = st.columns([1, 2, 1])
+        with col[1]:
+            st.title("Log In")
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
 
-        # Create two columns for the buttons
-        col1, col2 = st.columns([13, 2])
-        with col1:
-            if st.button("Log In", key="login_button"):
-                result = login_user(username, password)
-                if result is True:
-                    st.success("Login successful!")
-                    st.session_state['page'] = "view_borrowers"
+            # Create two columns for the buttons
+            col1, col2 = st.columns([13, 2])
+            with col1:
+                if st.button("Log In", key="login_button"):
+                    result = login_user(username, password)
+                    if result is True:
+                        st.success("Login successful!")
+                        st.session_state['page'] = "view_borrowers"
+                        st.rerun()
+                    elif result == "Username does not exist.":
+                        st.error("Username does not exist. Please register.")
+                    else:
+                        st.error("Incorrect password.")
+            with col2:
+                if st.button("Register", key="register_button"):
+                    st.session_state['page'] = "register"
                     st.rerun()
-                elif result == "Username does not exist.":
-                    st.error("Username does not exist. Please register.")
-                else:
-                    st.error("Incorrect password.")
-        with col2:
-            if st.button("Register", key="register_button"):
-                st.session_state['page'] = "register"
-                st.rerun()
 
     if st.session_state['page'] == "register":
-        st.title("Register")
-        username = st.text_input("Username")
-        password = st.text_input("Password", type="password")
+        col = st.columns([1, 2, 1])
+        with col[1]:
+            st.title("Register")
+            username = st.text_input("Username")
+            password = st.text_input("Password", type="password")
 
-        # Create two columns for the buttons
-        col1, col2 = st.columns([13, 2])
-        with col1:
-            if st.button("Register", key="register_button"):
-                if register_user(username, password):
-                    st.success("Registration successful!")
+            # Create two columns for the buttons
+            col1, col2 = st.columns([13, 2])
+            with col1:
+                if st.button("Register", key="register_button"):
+                    if register_user(username, password):
+                        st.success("Registration successful!")
+                        st.session_state['page'] = "login"
+                        st.rerun()
+            with col2:
+                if st.button("Log In", key="login_button"):
                     st.session_state['page'] = "login"
                     st.rerun()
-        with col2:
-            if st.button("Log In", key="login_button"):
-                st.session_state['page'] = "login"
-                st.rerun()
 
     if 'page_number' not in st.session_state:
         st.session_state['page_number'] = 1
@@ -438,27 +435,29 @@ def main():
             # st.table(df)
 
     if st.session_state['page'] == "add_borrower":
-        st.title("Add Borrower")
-        borrower_data = {
-            'name': st.text_input("Name"),
-            'mobile': st.text_input("Mobile"),
-            'loan_amount': st.number_input("Loan Amount", min_value=0, step=1000),
-            'loan_tenure': st.number_input("Loan Tenure (in days)", min_value=100, step=10),
-            'start_date': st.date_input("Start Date"),
-            'daily_collection': st.number_input(
-                "Daily Collection Amount", min_value=100, step=10),
-            'status': 'ACTIVE',
-            'remarks': st.text_area("Remarks")
-        }
+        col = st.columns([1, 2, 1])
+        with col[1]:
+            st.title("Add Borrower")
+            borrower_data = {
+                'name': st.text_input("Name"),
+                'mobile': st.text_input("Mobile"),
+                'loan_amount': st.number_input("Loan Amount", min_value=0, step=1000),
+                'loan_tenure': st.number_input("Loan Tenure (in days)", min_value=100, step=10),
+                'start_date': st.date_input("Start Date"),
+                'daily_collection': st.number_input(
+                    "Daily Collection Amount", min_value=100, step=10),
+                'status': 'ACTIVE',
+                'remarks': st.text_area("Remarks")
+            }
 
-        if st.button("Add Borrower"):
-            try:
-                add_borrower(borrower_data)
-                st.success("Borrower added successfully!")
-                st.session_state['page'] = "view_borrowers"
-                st.rerun()
-            except ValueError as e:
-                st.error(f"Error: {e}")
+            if st.button("Add Borrower"):
+                try:
+                    add_borrower(borrower_data)
+                    st.success("Borrower added successfully!")
+                    st.session_state['page'] = "view_borrowers"
+                    st.rerun()
+                except ValueError as e:
+                    st.error(f"Error: {e}")
 
     if st.session_state['page'] == "view_changes":
         st.title("Changes made to Borrowers Database.")
