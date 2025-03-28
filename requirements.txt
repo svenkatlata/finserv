@@ -2,3 +2,4 @@ pandas
 numpy
 streamlit
 streamlit-cookies-manager
+streamlit-navigation-bar

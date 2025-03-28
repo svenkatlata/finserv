@@ -5,20 +5,17 @@ import sqlite3
 import hashlib
 import json
 import datetime
+import re
 import pandas as pd
 import streamlit as st
 from streamlit_cookies_manager import EncryptedCookieManager
 
-LAYOUT_MODE = "wide"
-
-# Set Streamlit page layout to wide mode
 st.set_page_config(
     page_title="FinServ: A Financial Services App",
-    page_icon="streamlit",
-    layout=LAYOUT_MODE,
-    initial_sidebar_state="expanded"
+    page_icon="chart_with_upwards_trend",
+    layout="wide",
+    initial_sidebar_state="collapsed",
 )
-
 
 # Initialize cookie manager
 cookies = EncryptedCookieManager(
@@ -169,7 +166,7 @@ def add_borrower(borrower_data):
 
         # Insert borrower data into the database
         cursor.execute('''INSERT INTO borrowers (name, mobile, loan_amount, loan_tenure,
-                    start_date, daily_collection, status, remarks) 
+                    start_date, daily_collection, status, remarks)
                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)''',
                        (borrower_data['name'], borrower_data['mobile'], borrower_data['loan_amount'],
                         borrower_data['loan_tenure'], borrower_data['start_date'],
@@ -190,7 +187,7 @@ def update_remarks(borrower_id, remarks):
 
 
 def update_daily_payment(borrower_id, payment_amount):
-    """Update the last payment date (current date) and last 
+    """Update the last payment date (current date) and last
     payment amount for a borrower in the database."""
 
     # Input validation
@@ -284,8 +281,10 @@ def main():
     if cookies.get("logged_in"):
         st.session_state["logged_in"] = True
         st.session_state["username"] = cookies.get("user_name")
-        if not st.session_state.get('page') or st.session_state.get('page') is "login" or st.session_state.get('page') is "register":
-            # Initialize session state for the page
+        # Initialize session state for the page
+        if not st.session_state.get('page'):
+            st.session_state['page'] = "view_borrowers"
+        if st.session_state.get('page') == "login" or st.session_state.get('page') == "register":
             st.session_state['page'] = "view_borrowers"
     else:
         st.session_state["logged_in"] = False
@@ -343,96 +342,99 @@ def main():
         st.session_state['page_number'] = 1
 
     if st.session_state['page'] == "view_borrowers":
-        st.title("FinServ: Financial Services App")
-        col1, col2 = st.columns([13, 2])
-        with col1:
+        # Handle navigation selections
+        col = st.columns([10, 1, 2])
+        with col[2]:
             st.write("You are logged in as: " +
                      str(st.session_state["username"]))
-        with col2:
-            if st.sidebar.button("Log Out"):
+            if st.button("View Changes"):
+                st.session_state['page'] = "view_changes"
+                st.rerun()
+            if st.button("Log Out"):
                 logout_user()
                 st.session_state['page'] = "login"
                 st.session_state["logged_in"] = False
                 st.session_state["user_name"] = None
                 st.rerun()
-            if st.sidebar.button("Add Borrower"):
+
+        with col[0]:
+            st.title("FinServ: Financial Services App")
+
+            if st.button("Add Borrower"):
                 st.session_state['page'] = "add_borrower"
                 st.rerun()
-            if st.sidebar.button("View Changes"):
-                st.session_state['page'] = "view_changes"
-                st.rerun()
 
-        borrowers = get_borrowers()
-        if not borrowers:
-            st.write("No borrowers found.")
-        else:
-            # Display the borrowers in a table
-            # Convert borrowers' data to a DataFrame
-            columns = ["ID", "Name", "Mobile", "Loan Amount", "Loan Tenure", "Start Date",
-                       "Daily Collection", "Status", "Remarks"]
+            borrowers = get_borrowers()
+            if not borrowers:
+                st.write("No borrowers found.")
+            else:
+                # Display the borrowers in a table
+                # Convert borrowers' data to a DataFrame
+                columns = ["ID", "Name", "Mobile", "Loan Amount", "Loan Tenure", "Start Date",
+                           "Daily Collection", "Status", "Remarks"]
 
-            sql_columns = dict(zip(columns, ["id", "name", "mobile", "loan_amount", "loan_tenure",
-                                             "start_date", "daily_collection", "status", "remarks"]))
+                sql_columns = dict(zip(columns, ["id", "name", "mobile", "loan_amount", "loan_tenure",
+                                                 "start_date", "daily_collection", "status", "remarks"]))
 
-            df = pd.DataFrame(borrowers, columns=columns).set_index("ID")
-            for col in ["Loan Amount", "Loan Tenure", "Daily Collection"]:
-                df[col] = pd.to_numeric(df[col], errors='coerce').astype(int)
+                df = pd.DataFrame(borrowers, columns=columns).set_index("ID")
+                for col in ["Loan Amount", "Loan Tenure", "Daily Collection"]:
+                    df[col] = pd.to_numeric(
+                        df[col], errors='coerce').astype(int)
 
-            # Search for a borrower
-            search_query = st.text_input(
-                "Search Borrowers by Name or Mobile or Status")
+                # Search for a borrower
+                search_query = st.text_input(
+                    "Search Borrowers by Name or Mobile or Status")
 
-            if search_query:
-                filtered_df = df[df.apply(
-                    lambda row: search_query.lower() in str(row).lower(), axis=1)]
+                if search_query:
+                    filtered_df = df[df.apply(
+                        lambda row: search_query.lower() in str(row).lower(), axis=1)]
 
-                if filtered_df.empty:
-                    st.warning(
-                        "No results found. Please try a different search term.")
-                else:
-                    df = filtered_df.copy()
+                    if filtered_df.empty:
+                        st.warning(
+                            "No results found. Please try a different search term.")
+                    else:
+                        df = filtered_df.copy()
 
-            # Store original data in session state
-            if "original_df" not in st.session_state:
+                # Store original data in session state
                 st.session_state.original_df = df.copy()
 
-            # Display editable table
-            edited_df = st.data_editor(
-                df, use_container_width=True, key="editable_table")
+                # Display editable table
+                edited_df = st.data_editor(
+                    df, use_container_width=True, key="editable_table")
 
-            # Detect changes
-            changes = (edited_df != st.session_state.original_df).stack()
-            changed_cells = changes[changes].index.tolist()
+                changes = (edited_df != st.session_state.original_df).stack(
+                    dropna=False)
+                changed_cells = changes[changes].index.tolist()
 
-            # Log changes & update database
-            if changed_cells:
-                log_entries = []
-                # Get current user
-                username = str(st.session_state["username"])
+                # Log changes & update database
+                if changed_cells:
+                    log_entries = []
+                    # Get current user
+                    username = str(st.session_state["username"])
 
-                for row, col in changed_cells:
-                    old_value = st.session_state.original_df.at[row, col]
-                    new_value = edited_df.at[row, col]
+                    for row, col in changed_cells:
+                        old_value = st.session_state.original_df.at[row, col]
+                        new_value = edited_df.at[row, col]
 
-                    # Log the change
-                    log_entries.append(
-                        f"User: {username} | Row ID {row} - Column '{col}': '{old_value}' → '{new_value}'"
-                    )
+                        # Log the change
+                        log_entries.append(
+                            f"User: {username} | Row ID {row} - Column '{col}': '{old_value}' → '{new_value}'"
+                        )
 
-                    column = sql_columns[col]
+                        column = sql_columns[col]
 
-                    # Update the database
-                    update_database(row, column, new_value)
+                        # Update the database
+                        update_database(row, column, new_value)
 
-                # Save log to file
-                log_changes(log_entries)
+                    # Save log to file
+                    log_changes(log_entries)
 
-                # Update session state
-                st.session_state.original_df = edited_df.copy()
+                    # Update session state
+                    st.session_state.original_df = edited_df.copy()
 
-            # Display the table in Streamlit
-            # st.dataframe(df, use_container_width=True)
-            # st.table(df)
+                # Display the table in Streamlit
+                # st.dataframe(df, use_container_width=True)
+                # st.table(df)
 
     if st.session_state['page'] == "add_borrower":
         col = st.columns([1, 2, 1])
@@ -450,43 +452,72 @@ def main():
                 'remarks': st.text_area("Remarks")
             }
 
+            # Function to validate mobile number
+            def is_valid_mobile(mobile):
+                # Ensures exactly 10 digits
+                return bool(re.fullmatch(r"\d{10}", mobile))
+
             if st.button("Add Borrower"):
-                try:
-                    add_borrower(borrower_data)
-                    st.success("Borrower added successfully!")
-                    st.session_state['page'] = "view_borrowers"
-                    st.rerun()
-                except ValueError as e:
-                    st.error(f"Error: {e}")
+                if not all([
+                    borrower_data['name'].strip(),
+                    borrower_data['mobile'].strip(),
+                    borrower_data['start_date'],
+                    borrower_data['loan_amount'] > 0,
+                    borrower_data['loan_tenure'] > 0,
+                    borrower_data['daily_collection'] > 0
+                ]):
+                    st.error(
+                        "All fields are required. Please fill in all fields before submitting.")
+                elif not is_valid_mobile(borrower_data['mobile']):
+                    st.error(
+                        "Invalid mobile number. It must be exactly 10 digits.")
+                else:
+                    try:
+                        add_borrower(borrower_data)
+                        # Fetch updated DataFrame after addition
+                        borrowers = get_borrowers()
+                        columns = ["ID", "Name", "Mobile", "Loan Amount", "Loan Tenure", "Start Date",
+                                   "Daily Collection", "Status", "Remarks"]
+                        df = pd.DataFrame(
+                            borrowers, columns=columns).set_index("ID")
+                        for col in ["Loan Amount", "Loan Tenure", "Daily Collection"]:
+                            df[col] = pd.to_numeric(
+                                df[col], errors='coerce').astype(int)
+
+                        st.success("Borrower added successfully!")
+                        st.session_state['page'] = "view_borrowers"
+                        st.rerun()
+                    except ValueError as e:
+                        st.error(f"Error: {e}")
 
     if st.session_state['page'] == "view_changes":
-        st.title("Changes made to Borrowers Database.")
-        col1, col2 = st.columns([13, 2])
-        with col1:
+        col = st.columns([10, 1, 2])
+        with col[2]:
             st.write("You are logged in as: " +
                      str(st.session_state["username"]))
-        with col2:
-            if st.sidebar.button("Log Out"):
+            if st.button("Log Out"):
                 logout_user()
                 st.session_state['page'] = "login"
                 st.session_state["logged_in"] = False
                 st.session_state["user_name"] = None
                 st.rerun()
-            if st.sidebar.button("View Borrowers"):
+        with col[0]:
+            st.title("Changes made to Borrowers Database.")
+            # Read the log file and display its contents
+            if st.button("View Borrowers"):
                 st.session_state['page'] = "view_borrowers"
                 st.rerun()
-        # Read the log file and display its contents
-        try:
-            with open("changes_log.txt", "r", encoding="utf-8") as log_file:
-                changes = log_file.readlines()
-            if changes:
-                st.write("Changes made to the borrowers:")
-                for change in changes:
-                    st.write(change.strip())
-            else:
+            try:
+                with open("changes_log.txt", "r", encoding="utf-8") as log_file:
+                    changes = log_file.readlines()
+                if changes:
+                    st.write("Changes made to the borrowers:")
+                    for change in changes:
+                        st.write(change.strip())
+                else:
+                    st.write("No changes logged yet.")
+            except FileNotFoundError:
                 st.write("No changes logged yet.")
-        except FileNotFoundError:
-            st.write("No changes logged yet.")
 
 
 if __name__ == "__main__":
