@@ -1,0 +1,4 @@
+2025-03-28 21:11:51 - User: svenkatlata | Row ID 1 - Column 'Name': 'Shiva' → 'Lata'
+2025-03-28 21:12:08 - User: svenkatlata | Row ID 1 - Column 'Mobile': '9999999999' → '9933447788'
+2025-03-28 21:12:41 - User: svenkatlata | Row ID 1 - Column 'Status': 'ACTIVE' → 'DEFAULTED'
+2025-03-28 21:12:57 - User: svenkatlata | Row ID 1 - Column 'Status': 'DEFAULTED' → 'ACTIVE'
