@@ -1,14 +1,7 @@
 """FinServ: A Financial Services App for Borrowers and Investors"""
 
 # Import necessary libraries
-import sqlite3
-import hashlib
-import json
-import datetime
-import re
-import pandas as pd
 import streamlit as st
-from streamlit_cookies_manager import EncryptedCookieManager
 
 st.set_page_config(
     page_title="FinServ: A Financial Services App",
@@ -16,6 +9,20 @@ st.set_page_config(
     layout="wide",
     initial_sidebar_state="collapsed",
 )
+
+from datetime import datetime
+from re import fullmatch
+import json
+import hashlib
+import sqlite3
+import warnings
+warnings.filterwarnings("ignore")
+
+import pandas as pd
+from streamlit_cookies_manager import EncryptedCookieManager
+
+
+
 
 # Initialize cookie manager
 cookies = EncryptedCookieManager(
@@ -255,7 +262,7 @@ def log_changes(changes):
     """Log changes to a file with timestamps."""
     # Ensure the log file is opened in append mode with UTF-8 encoding
     with open("changes_log.txt", "a", encoding="utf-8") as log_file:
-        timestamp = datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+        timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
         for change in changes:
             log_file.write(f"{timestamp} - {change}\n")
 
@@ -292,31 +299,29 @@ def main():
         if not st.session_state.get('page'):
             # Initialize session state for the page
             st.session_state['page'] = "login"
-
+    
     if st.session_state['page'] == "login":
         col = st.columns([1, 2, 1])
         with col[1]:
             st.title("Log In")
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
-
-            # Create two columns for the buttons
-            col1, col2 = st.columns([13, 2])
-            with col1:
-                if st.button("Log In", key="login_button"):
-                    result = login_user(username, password)
-                    if result is True:
-                        st.success("Login successful!")
-                        st.session_state['page'] = "view_borrowers"
-                        st.rerun()
-                    elif result == "Username does not exist.":
-                        st.error("Username does not exist. Please register.")
-                    else:
-                        st.error("Incorrect password.")
-            with col2:
-                if st.button("Register", key="register_button"):
-                    st.session_state['page'] = "register"
+            
+            if st.button("Log In", key="login_button"):
+                result = login_user(username, password)
+                if result is True:
+                    st.success("Login successful!")
+                    st.session_state['page'] = "view_borrowers"
                     st.rerun()
+                elif result == "Username does not exist.":
+                    st.error("Username does not exist. Please register.")
+                else:
+                    st.error("Incorrect password.")
+        with col[2]:
+            st.write("Don't have an account?")
+            if st.button("Register Now", key="register_button"):
+                st.session_state['page'] = "register"
+                st.rerun()
 
     if st.session_state['page'] == "register":
         col = st.columns([1, 2, 1])
@@ -325,18 +330,23 @@ def main():
             username = st.text_input("Username")
             password = st.text_input("Password", type="password")
 
-            # Create two columns for the buttons
-            col1, col2 = st.columns([13, 2])
-            with col1:
-                if st.button("Register", key="register_button"):
+            
+            if st.button("Register", key="register_button"):
+                if not username.strip():
+                    st.warning("Username cannot be empty.")
+                elif not password.strip():
+                    st.warning("Password cannot be empty.")
+                else:
                     if register_user(username, password):
                         st.success("Registration successful!")
                         st.session_state['page'] = "login"
                         st.rerun()
-            with col2:
-                if st.button("Log In", key="login_button"):
-                    st.session_state['page'] = "login"
-                    st.rerun()
+            
+        with col[2]:
+            st.write("Already have an account?")
+            if st.button("Go to login", key="login_button"):
+                st.session_state['page'] = "login"
+                st.rerun()
 
     if 'page_number' not in st.session_state:
         st.session_state['page_number'] = 1
@@ -379,7 +389,7 @@ def main():
                 df = pd.DataFrame(borrowers, columns=columns).set_index("ID")
                 for col in ["Loan Amount", "Loan Tenure", "Daily Collection"]:
                     df[col] = pd.to_numeric(
-                        df[col], errors='coerce').astype(int)
+                        df[col], errors='coerce').fillna(0).astype(int)
 
                 # Search for a borrower
                 search_query = st.text_input(
@@ -402,6 +412,8 @@ def main():
                 edited_df = st.data_editor(
                     df, use_container_width=True, key="editable_table")
 
+                edited_df = edited_df.convert_dtypes()
+
                 changes = (edited_df != st.session_state.original_df).stack(
                     dropna=False)
                 changed_cells = changes[changes].index.tolist()
@@ -415,6 +427,9 @@ def main():
                     for row, col in changed_cells:
                         old_value = st.session_state.original_df.at[row, col]
                         new_value = edited_df.at[row, col]
+
+                        if col in ["Loan Amount", "Loan Tenure", "Daily Collection"]:
+                            new_value = int(new_value)
 
                         # Log the change
                         log_entries.append(
@@ -455,7 +470,7 @@ def main():
             # Function to validate mobile number
             def is_valid_mobile(mobile):
                 # Ensures exactly 10 digits
-                return bool(re.fullmatch(r"\d{10}", mobile))
+                return bool(fullmatch(r"\d{10}", mobile))
 
             if st.button("Add Borrower"):
                 if not all([
